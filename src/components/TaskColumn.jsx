@@ -2,7 +2,13 @@ import React from "react";
 import { Droppable } from "@hello-pangea/dnd";
 import Task from "./Task";
 
-export default function TaskColumn({ columnId, tasks, onEdit, onDelete }) {
+export default function TaskColumn({
+  columnId,
+  tasks,
+  onEdit,
+  onDelete,
+  teamMembers,
+}) {
   return (
     <div className="flex-1 bg-gray-100/80 p-4 rounded-xl min-w-[280px] border border-gray-200 flex flex-col">
       <div className="flex justify-between items-center mb-4 px-1">
@@ -28,6 +34,7 @@ export default function TaskColumn({ columnId, tasks, onEdit, onDelete }) {
                 index={index}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                teamMembers={teamMembers}
               />
             ))}
             {provided.placeholder}

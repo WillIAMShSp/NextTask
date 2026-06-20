@@ -4,20 +4,23 @@ import { supabase } from "./utils/supabase-js";
 
 import TaskColumn from "./components/TaskColumn";
 import TaskModal from "./components/TaskModal";
-
-// Initialize Supabase
+import TeamManagerModal from "./components/TeamManagerModal";
 
 const COLUMNS = ["todo", "in_progress", "in_review", "done"];
 
 export default function KanbanBoard({ userId }) {
   const [tasks, setTasks] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Simplified Modal State
+  // this is the task modal
   const [isModalOpen, setIsModalOpen] = useState(false);
+  //and this one is the team manager one
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+
   const [taskToEdit, setTaskToEdit] = useState(null);
 
-  const fetchTasks = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("tasks")
@@ -27,12 +30,21 @@ export default function KanbanBoard({ userId }) {
 
     if (error) console.error("Error fetching tasks:", error);
     else setTasks(data || []);
+    const { data: teamData, error: teamError } = await supabase
+      .from("team_members")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true });
+
+    if (teamError) console.error("Error fetching team:", teamError);
+    else setTeamMembers(teamData || []);
+
     setLoading(false);
   }, [userId]);
 
   useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+    fetchData();
+  }, [fetchData]);
 
   const openAddModal = () => {
     setTaskToEdit(null);
@@ -44,7 +56,41 @@ export default function KanbanBoard({ userId }) {
     setIsModalOpen(true);
   };
 
-  const handleSaveTask = async ({ id, title, status }) => {
+  const handleAddTeamMember = async (name) => {
+    const { data, error } = await supabase
+      .from("team_members")
+      .insert([{ name, user_id: userId }])
+      .select();
+
+    if (error) {
+      console.error("Error adding member:", error);
+    } else if (data && data.length > 0) {
+      setTeamMembers((prev) => [...prev, data[0]]);
+    }
+  };
+
+  const handleRemoveTeamMember = async (id) => {
+    // Optimistically update the UI to feel fast
+    setTeamMembers((prev) => prev.filter((member) => member.id !== id));
+
+    const { error } = await supabase.from("team_members").delete().eq("id", id);
+
+    if (error) {
+      console.error("Error removing member:", error);
+      fetchData(); // Revert if database fails
+    } else {
+      // Re-fetch data because deleting a user sets their tasks to "Unassigned"
+      fetchData();
+    }
+  };
+
+  const handleSaveTask = async ({
+    id,
+    title,
+    description,
+    status,
+    assignee_id,
+  }) => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
 
@@ -52,20 +98,32 @@ export default function KanbanBoard({ userId }) {
       // EDIT EXISTING
       setTasks(
         tasks.map((t) =>
-          t.id === id ? { ...t, title: trimmedTitle, status } : t,
+          t.id === id
+            ? { ...t, title: trimmedTitle, description, status, assignee_id }
+            : t,
         ),
       );
       const { error } = await supabase
         .from("tasks")
-        .update({ title: trimmedTitle, status })
+        .update({ title: trimmedTitle, description, status, assignee_id })
         .eq("id", id);
-      if (error) fetchTasks();
+
+      if (error) fetchData();
     } else {
       // ADD NEW
       const { data, error } = await supabase
         .from("tasks")
-        .insert([{ title: trimmedTitle, status, user_id: userId }])
+        .insert([
+          {
+            title: trimmedTitle,
+            description,
+            status,
+            user_id: userId,
+            assignee_id,
+          },
+        ])
         .select();
+
       if (data && data.length > 0) setTasks((prev) => [...prev, data[0]]);
       if (error) console.error(error);
     }
@@ -75,7 +133,7 @@ export default function KanbanBoard({ userId }) {
   const handleDeleteTask = async (taskId) => {
     setTasks((prev) => prev.filter((task) => task.id !== taskId));
     const { error } = await supabase.from("tasks").delete().eq("id", taskId);
-    if (error) fetchTasks();
+    if (error) fetchData();
   };
 
   const handleDragEnd = async (result) => {
@@ -98,7 +156,7 @@ export default function KanbanBoard({ userId }) {
       .from("tasks")
       .update({ status: newStatus })
       .eq("id", draggableId);
-    if (error) fetchTasks();
+    if (error) fetchData();
   };
 
   if (loading) {
@@ -118,32 +176,30 @@ export default function KanbanBoard({ userId }) {
   }
 
   return (
-    <div style={{ padding: "20px", fontFamily: "sans-serif" }}>
-      <div
-        style={{
-          marginBottom: "20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <h2>My Board</h2>
-        <button
-          onClick={openAddModal}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#0052cc",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
-        >
-          + Add Task
-        </button>
+    <div className="p-6 font-sans">
+      {/* Top Bar */}
+      <div className="mb-6 flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800">My Board</h2>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsTeamModalOpen(true)}
+            className="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 transition-colors"
+          >
+            Manage Team
+          </button>
+
+          <button
+            onClick={openAddModal}
+            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors"
+          >
+            + Add Task
+          </button>
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: "20px" }}>
+      {/* The Kanban Board */}
+      <div className="flex gap-6 overflow-x-auto pb-4">
         <DragDropContext onDragEnd={handleDragEnd}>
           {COLUMNS.map((columnId) => (
             <TaskColumn
@@ -152,6 +208,7 @@ export default function KanbanBoard({ userId }) {
               tasks={tasks.filter((task) => task.status === columnId)}
               onEdit={openEditModal}
               onDelete={handleDeleteTask}
+              teamMembers={teamMembers}
             />
           ))}
         </DragDropContext>
@@ -163,6 +220,15 @@ export default function KanbanBoard({ userId }) {
         onSave={handleSaveTask}
         taskToEdit={taskToEdit}
         columns={COLUMNS}
+        teamMembers={teamMembers}
+        userId={userId}
+      />
+      <TeamManagerModal
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        teamMembers={teamMembers}
+        onAddMember={handleAddTeamMember}
+        onRemoveMember={handleRemoveTeamMember}
       />
     </div>
   );
