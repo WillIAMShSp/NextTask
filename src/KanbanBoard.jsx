@@ -1,41 +1,38 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { DragDropContext } from "@hello-pangea/dnd";
 import { supabase } from "./utils/supabase-js";
 
 import TaskColumn from "./components/TaskColumn";
 import TaskModal from "./components/TaskModal";
 
-//5d92af4d-b6fc-4e91-8c99-5c7a0d4c16ec"
 // Initialize Supabase
 
 const COLUMNS = ["todo", "in_progress", "in_review", "done"];
 
-export default function KanbanBoard() {
+export default function KanbanBoard({ userId }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Simplified Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [taskToEdit, setTaskToEdit] = useState(null); // null means "Add Mode"
+  const [taskToEdit, setTaskToEdit] = useState(null);
 
-  const guestUserId = "11111111-1111-1111-1111-111111111111";
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("tasks")
       .select("*")
-      .eq("user_id", guestUserId)
+      .eq("user_id", userId)
       .order("created_at", { ascending: true });
 
     if (error) console.error("Error fetching tasks:", error);
     else setTasks(data || []);
     setLoading(false);
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
   const openAddModal = () => {
     setTaskToEdit(null);
@@ -67,7 +64,7 @@ export default function KanbanBoard() {
       // ADD NEW
       const { data, error } = await supabase
         .from("tasks")
-        .insert([{ title: trimmedTitle, status, user_id: guestUserId }])
+        .insert([{ title: trimmedTitle, status, user_id: userId }])
         .select();
       if (data && data.length > 0) setTasks((prev) => [...prev, data[0]]);
       if (error) console.error(error);
@@ -104,7 +101,21 @@ export default function KanbanBoard() {
     if (error) fetchTasks();
   };
 
-  if (loading) return <div style={{ padding: "20px" }}>Loading board...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          {/* The Spinning Circle */}
+          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+
+          {/* The Pulsing Text */}
+          <p className="text-gray-500 font-medium animate-pulse">
+            Loading your board...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: "20px", fontFamily: "sans-serif" }}>

@@ -9,49 +9,30 @@ export default function Task({ task, index, onEdit, onDelete }) {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
+          className={`
+            select-none p-4 mb-2 rounded-md shadow-sm border border-gray-200 
+            flex justify-between items-start gap-3 transition-shadow duration-200 cursor-grab active:cursor-grabbing
+            ${snapshot.isDragging ? "bg-blue-50 shadow-lg" : "bg-white hover:shadow-md"}
+          `}
           style={{
-            userSelect: "none",
-            padding: "16px",
-            margin: "0 0 8px 0",
-            backgroundColor: snapshot.isDragging ? "#e6f7ff" : "#ffffff",
-            color: "#333",
-            borderRadius: "4px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-            cursor: "grab",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "10px",
-            ...provided.draggableProps.style,
+            ...provided.draggableProps.style, // Keep this! DND needs it to physically move the element
           }}
         >
-          <span style={{ wordBreak: "break-word", flex: 1 }}>{task.title}</span>
+          <span className="break-words flex-1 text-gray-800 text-sm">
+            {task.title}
+          </span>
 
-          <div style={{ display: "flex", gap: "8px" }}>
+          <div className="flex gap-2 opacity-50 hover:opacity-100 transition-opacity">
             <button
               onClick={() => onEdit(task)}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#666",
-                fontSize: "14px",
-                cursor: "pointer",
-                padding: "0",
-              }}
+              className="text-gray-500 hover:text-blue-600 transition-colors"
               title="Edit Task"
             >
               ✎
             </button>
             <button
               onClick={() => onDelete(task.id)}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#999",
-                fontSize: "18px",
-                cursor: "pointer",
-                padding: "0",
-              }}
+              className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none"
               title="Delete Task"
             >
               &times;
