@@ -1,12 +1,20 @@
 /**This function is used by TaskModal and Task classes and it determines wether or the date of the task passed is overdue
  * @param dateString the passed date;
- * @returns an object with both the status (ie. wether or not it is overdue, and the color of the visual indicator)
+ * @param status the status of the task (i.e is it todo or is it done already)
+ * @returns an object with both the due date status (ie. wether or not it is overdue, and the color of the visual indicator)
  */
-const getDueDateStatus = (dateString) => {
+const getDueDateStatus = (dateString, status) => {
   if (!dateString) return null;
 
   const dueDate = new Date(dateString);
   const now = new Date();
+
+  if (status === "done") {
+    return {
+      label: `Completed`,
+      styles: "bg-green-100 text-green-800 border-green-300",
+    };
+  }
 
   const diffHours = (dueDate - now) / (1000 * 60 * 60);
 

@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../utils/supabase-js";
+import {
+  getDueDateStatus,
+  formatToDateTimeLocal,
+} from "../controller_functions/DueDate";
 
 const LABEL_COLORS = [
   { bg: "bg-red-100", textColor: "text-red-700", border: "border-red-200" },
@@ -42,6 +46,7 @@ export default function TaskModal({
   const [status, setStatus] = useState("todo");
   const [assigneeId, setAssigneeId] = useState("");
 
+  const [dueDate, setDueDate] = useState("");
   const [labels, setLabels] = useState([]);
   const [newLabelText, setNewLabelText] = useState("");
   const [selectedColor, setSelectedColor] = useState(LABEL_COLORS[4]);
@@ -57,6 +62,7 @@ export default function TaskModal({
       setAssigneeId(taskToEdit.assignee_id || "");
       setLabels(taskToEdit.labels || []);
       fetchComments(taskToEdit.id);
+      setDueDate(formatToDateTimeLocal(taskToEdit.due_date));
     } else {
       setTitle("");
       setDescription("");
@@ -64,6 +70,7 @@ export default function TaskModal({
       setAssigneeId("");
       setLabels([]);
       setComments([]);
+      setDueDate("");
     }
     setNewLabelText("");
   }, [taskToEdit, isOpen]);
@@ -111,14 +118,29 @@ export default function TaskModal({
       description,
       status,
       assignee_id: assigneeId === "" ? null : assigneeId,
-      labels, // Include labels in the save payload
+      labels,
+      due_date: dueDate ? new Date(dueDate).toISOString() : null,
     });
   };
+  const dueStatus = getDueDateStatus(dueDate, status);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
       <div className="bg-white p-6 md:p-8 rounded-lg w-full max-w-2xl shadow-xl max-h-[90vh] flex flex-col relative">
         <div className="flex-shrink-0">
+          <div className="flex justify-between items-start mb-2">
+            {
+              dueStatus ? (
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-bold border ${dueStatus.styles}`}
+                >
+                  {dueStatus.label}
+                </span>
+              ) : (
+                <div />
+              ) /* Empty div to push title down if no date */
+            }
+          </div>
           <h3 className="mt-0 text-xl font-bold mb-4 text-gray-800">
             {taskToEdit ? "Edit Task" : "Create a new task"}
           </h3>
@@ -228,6 +250,18 @@ export default function TaskModal({
                   </option>
                 ))}
               </select>
+            </div>
+            {/* date*/}
+            <div className="flex-1 min-w-[140px]">
+              <label className="block text-xs text-gray-500 mb-1 uppercase font-semibold tracking-wide">
+                Due Date
+              </label>
+              <input
+                type="datetime-local"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
           </div>
         </div>

@@ -1,9 +1,18 @@
 import React from "react";
 import { Draggable } from "@hello-pangea/dnd";
+import { getDueDateStatus } from "../controller_functions/DueDate";
 
-export default function Task({ task, index, onEdit, onDelete, teamMembers }) {
+export default function TaskCard({
+  task,
+  index,
+  onEdit,
+  onDelete,
+  teamMembers,
+}) {
   const assignedMember = teamMembers?.find((m) => m.id === task.assignee_id);
   const labels = task.labels || [];
+
+  const dueStatus = getDueDateStatus(task.due_date, task.status);
 
   return (
     <Draggable draggableId={task.id} index={index}>
@@ -19,7 +28,6 @@ export default function Task({ task, index, onEdit, onDelete, teamMembers }) {
           `}
           style={{ ...provided.draggableProps.style }}
         >
-          {/* Render Labels */}
           {labels.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-1">
               {labels.map((label, i) => (
@@ -34,11 +42,22 @@ export default function Task({ task, index, onEdit, onDelete, teamMembers }) {
           )}
 
           <div className="flex justify-between items-start gap-3">
-            <span className="break-words flex-1 text-gray-800 text-sm font-medium">
-              {task.title}
-            </span>
+            <div className="flex flex-col gap-1 flex-1">
+              <span className="break-words text-gray-800 text-sm font-medium">
+                {task.title}
+              </span>
 
-            <div className="flex gap-2 opacity-50 hover:opacity-100 transition-opacity">
+              {/* Due Date Badge below the title */}
+              {dueStatus && (
+                <span
+                  className={`w-max mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${dueStatus.styles}`}
+                >
+                  {dueStatus.label}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2 opacity-50 hover:opacity-100 transition-opacity shrink-0">
               <button
                 onClick={() => onEdit(task)}
                 className="text-gray-500 hover:text-blue-600 transition-colors"

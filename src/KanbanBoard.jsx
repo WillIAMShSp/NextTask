@@ -109,8 +109,9 @@ export default function KanbanBoard({ userId }) {
     status,
     assignee_id,
     labels,
+    due_date,
   }) => {
-    // Add labels here
+    // 1. Add due_date here
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
 
@@ -126,6 +127,7 @@ export default function KanbanBoard({ userId }) {
                 status,
                 assignee_id,
                 labels,
+                due_date,
               }
             : t,
         ),
@@ -138,7 +140,8 @@ export default function KanbanBoard({ userId }) {
           status,
           assignee_id,
           labels,
-        }) // Update labels
+          due_date,
+        }) // 2. Add due_date here
         .eq("id", id);
 
       if (!error) {
@@ -157,8 +160,9 @@ export default function KanbanBoard({ userId }) {
             user_id: userId,
             assignee_id,
             labels,
+            due_date,
           },
-        ]) // Insert labels
+        ]) // 3. Add due_date here
         .select();
 
       if (data && data.length > 0) {
