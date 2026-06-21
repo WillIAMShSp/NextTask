@@ -7,6 +7,8 @@ import TaskModal from "./components/TaskModal";
 import TeamManagerModal from "./components/TeamManagerModal";
 import BoardHistoryModal from "./components/BoardHistoryModal";
 
+import { getDueDateStatus } from "./controller_functions/DueDate";
+
 const COLUMNS = ["todo", "in_progress", "in_review", "done"];
 
 export default function KanbanBoard({ userId }) {
@@ -20,6 +22,15 @@ export default function KanbanBoard({ userId }) {
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   // and this is the history one
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState("");
+  const [filterDueDate, setFilterDueDate] = useState("");
+  const [filterLabel, setFilterLabel] = useState("");
+
+  const allUniqueLabels = Array.from(
+    new Set(tasks.flatMap((t) => (t.labels || []).map((l) => l.text))),
+  );
 
   const [taskToEdit, setTaskToEdit] = useState(null);
 
@@ -224,6 +235,46 @@ export default function KanbanBoard({ userId }) {
       </div>
     );
   }
+  const filteredTasks = tasks.filter((task) => {
+    // 1. Search Query (checks title and description)
+    const matchesSearch =
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (task.description &&
+        task.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    // 2. Assignee Filter
+    const matchesAssignee =
+      filterAssignee === "unassigned"
+        ? !task.assignee_id
+        : filterAssignee
+          ? task.assignee_id === filterAssignee
+          : true;
+
+    // 3. Label Filter
+    const matchesLabel = filterLabel
+      ? (task.labels || []).some((l) => l.text === filterLabel)
+      : true;
+
+    // 4. Due Date Filter
+    let matchesDate = true;
+    if (filterDueDate) {
+      const dueInfo = getDueDateStatus(task.due_date, task.status);
+
+      if (filterDueDate === "completed") {
+        matchesDate = task.status === "done";
+      } else if (filterDueDate === "overdue") {
+        matchesDate = dueInfo?.label.startsWith("Overdue");
+      } else if (filterDueDate === "soon") {
+        matchesDate = dueInfo?.label.startsWith("Due Soon");
+      } else if (filterDueDate === "later") {
+        matchesDate = dueInfo?.label.startsWith("Due:"); // The standard 'Due' label
+      } else if (filterDueDate === "none") {
+        matchesDate = !task.due_date;
+      }
+    }
+
+    return matchesSearch && matchesAssignee && matchesLabel && matchesDate;
+  });
 
   return (
     <div className="p-6 font-sans">
@@ -254,6 +305,76 @@ export default function KanbanBoard({ userId }) {
             + Add Task
           </button>
         </div>
+        {/*filter bar */}
+        <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-wrap gap-4 items-center">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Assignee Filter */}
+          <select
+            value={filterAssignee}
+            onChange={(e) => setFilterAssignee(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md text-sm outline-none bg-white min-w-[140px]"
+          >
+            <option value="">All Assignees</option>
+            <option value="unassigned">Unassigned</option>
+            {teamMembers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Due Date Filter */}
+          <select
+            value={filterDueDate}
+            onChange={(e) => setFilterDueDate(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md text-sm outline-none bg-white min-w-[140px]"
+          >
+            <option value="">Any Due Date</option>
+            <option value="overdue">Overdue</option>
+            <option value="soon">Due Soon</option>
+            <option value="later">Due Later</option>
+            <option value="none">No Due Date</option>
+          </select>
+
+          {/* Label Filter */}
+          <select
+            value={filterLabel}
+            onChange={(e) => setFilterLabel(e.target.value)}
+            className="p-2 border border-gray-300 rounded-md text-sm outline-none bg-white min-w-[140px]"
+          >
+            <option value="">All Labels</option>
+            {allUniqueLabels.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+
+          {/* Clear Filters Button */}
+          {(searchQuery || filterAssignee || filterDueDate || filterLabel) && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setFilterAssignee("");
+                setFilterDueDate("");
+                setFilterLabel("");
+              }}
+              className="text-sm text-gray-500 hover:text-red-600 font-medium px-2"
+            >
+              Clear All
+            </button>
+          )}
+        </div>
       </div>
 
       {/* The Kanban Board */}
@@ -263,7 +384,7 @@ export default function KanbanBoard({ userId }) {
             <TaskColumn
               key={columnId}
               columnId={columnId}
-              tasks={tasks.filter((task) => task.status === columnId)}
+              tasks={filteredTasks.filter((task) => task.status === columnId)}
               onEdit={openEditModal}
               onDelete={handleDeleteTask}
               teamMembers={teamMembers}
