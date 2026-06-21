@@ -108,7 +108,9 @@ export default function KanbanBoard({ userId }) {
     description,
     status,
     assignee_id,
+    labels,
   }) => {
+    // Add labels here
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
 
@@ -117,17 +119,32 @@ export default function KanbanBoard({ userId }) {
       setTasks(
         tasks.map((t) =>
           t.id === id
-            ? { ...t, title: trimmedTitle, description, status, assignee_id }
+            ? {
+                ...t,
+                title: trimmedTitle,
+                description,
+                status,
+                assignee_id,
+                labels,
+              }
             : t,
         ),
       );
       const { error } = await supabase
         .from("tasks")
-        .update({ title: trimmedTitle, description, status, assignee_id })
+        .update({
+          title: trimmedTitle,
+          description,
+          status,
+          assignee_id,
+          labels,
+        }) // Update labels
         .eq("id", id);
 
-      if (error) fetchData();
-      logAction(`Updated Task ${trimmedTitle}`);
+      if (!error) {
+        logAction(`Updated task "${trimmedTitle}"`);
+        fetchData();
+      }
     } else {
       // ADD NEW
       const { data, error } = await supabase
@@ -139,13 +156,16 @@ export default function KanbanBoard({ userId }) {
             status,
             user_id: userId,
             assignee_id,
+            labels,
           },
-        ])
+        ]) // Insert labels
         .select();
 
-      if (data && data.length > 0) setTasks((prev) => [...prev, data[0]]);
+      if (data && data.length > 0) {
+        setTasks((prev) => [...prev, data[0]]);
+        logAction(`Created new task "${trimmedTitle}"`);
+      }
       if (error) console.error(error);
-      logAction(`Added task ${trimmedTitle}`);
     }
     setIsModalOpen(false);
   };

@@ -1,6 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../utils/supabase-js";
 
+const LABEL_COLORS = [
+  { bg: "bg-red-100", textColor: "text-red-700", border: "border-red-200" },
+  {
+    bg: "bg-orange-100",
+    textColor: "text-orange-700",
+    border: "border-orange-200",
+  },
+  {
+    bg: "bg-yellow-100",
+    textColor: "text-yellow-800",
+    border: "border-yellow-200",
+  },
+  {
+    bg: "bg-green-100",
+    textColor: "text-green-700",
+    border: "border-green-200",
+  },
+  { bg: "bg-blue-100", textColor: "text-blue-700", border: "border-blue-200" },
+  {
+    bg: "bg-purple-100",
+    textColor: "text-purple-700",
+    border: "border-purple-200",
+  },
+  { bg: "bg-pink-100", textColor: "text-pink-700", border: "border-pink-200" },
+  { bg: "bg-gray-100", textColor: "text-gray-700", border: "border-gray-200" },
+];
+
 export default function TaskModal({
   isOpen,
   onClose,
@@ -15,7 +42,10 @@ export default function TaskModal({
   const [status, setStatus] = useState("todo");
   const [assigneeId, setAssigneeId] = useState("");
 
-  // Comments state
+  const [labels, setLabels] = useState([]);
+  const [newLabelText, setNewLabelText] = useState("");
+  const [selectedColor, setSelectedColor] = useState(LABEL_COLORS[4]);
+
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
 
@@ -25,14 +55,17 @@ export default function TaskModal({
       setDescription(taskToEdit.description || "");
       setStatus(taskToEdit.status);
       setAssigneeId(taskToEdit.assignee_id || "");
+      setLabels(taskToEdit.labels || []);
       fetchComments(taskToEdit.id);
     } else {
       setTitle("");
       setDescription("");
       setStatus("todo");
       setAssigneeId("");
+      setLabels([]);
       setComments([]);
     }
+    setNewLabelText("");
   }, [taskToEdit, isOpen]);
 
   const fetchComments = async (taskId) => {
@@ -41,24 +74,32 @@ export default function TaskModal({
       .select("*")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true });
-
     if (!error && data) setComments(data);
   };
 
   const handlePostComment = async () => {
     if (!newComment.trim() || !taskToEdit) return;
-
     const { data, error } = await supabase
       .from("comments")
       .insert([
         { task_id: taskToEdit.id, user_id: userId, content: newComment.trim() },
       ])
       .select();
-
     if (!error && data) {
       setComments((prev) => [...prev, data[0]]);
       setNewComment("");
     }
+  };
+
+  const handleAddLabel = () => {
+    if (!newLabelText.trim()) return;
+    const newLabel = { text: newLabelText.trim(), ...selectedColor };
+    setLabels([...labels, newLabel]);
+    setNewLabelText("");
+  };
+
+  const handleRemoveLabel = (indexToRemove) => {
+    setLabels(labels.filter((_, index) => index !== indexToRemove));
   };
 
   if (!isOpen) return null;
@@ -70,13 +111,13 @@ export default function TaskModal({
       description,
       status,
       assignee_id: assigneeId === "" ? null : assigneeId,
+      labels, // Include labels in the save payload
     });
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
       <div className="bg-white p-6 md:p-8 rounded-lg w-full max-w-2xl shadow-xl max-h-[90vh] flex flex-col relative">
-        {/* Header & Task Details */}
         <div className="flex-shrink-0">
           <h3 className="mt-0 text-xl font-bold mb-4 text-gray-800">
             {taskToEdit ? "Edit Task" : "Create a new task"}
@@ -94,10 +135,66 @@ export default function TaskModal({
             placeholder="Add a more detailed description..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-3 mb-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px] resize-y text-sm text-gray-700"
+            className="w-full p-3 mb-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px] resize-y text-sm text-gray-700"
           />
 
-          <div className="flex gap-4 mb-6">
+          {/*Labels Section */}
+          <div className="mb-4">
+            <label className="block text-xs text-gray-500 mb-2 uppercase font-semibold tracking-wide">
+              Labels
+            </label>
+
+            {/* Active Labels List */}
+            {labels.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {labels.map((label, index) => (
+                  // UPDATED: Changed label.text to label.textColor in the className string
+                  <span
+                    key={index}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold border ${label.bg} ${label.textColor} ${label.border}`}
+                  >
+                    {label.text}
+                    <button
+                      onClick={() => handleRemoveLabel(index)}
+                      className="ml-1 opacity-60 hover:opacity-100 font-bold"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Add Label Controls */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="New label..."
+                value={newLabelText}
+                onChange={(e) => setNewLabelText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddLabel()}
+                className="p-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none w-32"
+              />
+              <div className="flex gap-1">
+                {LABEL_COLORS.map((color, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedColor(color)}
+                    className={`w-6 h-6 rounded-full border-2 ${color.bg} ${selectedColor.bg === color.bg ? "border-gray-800 scale-110" : "border-transparent hover:scale-110"} transition-transform`}
+                    title="Select color"
+                  />
+                ))}
+              </div>
+              <button
+                onClick={handleAddLabel}
+                className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded hover:bg-gray-200 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-4 mb-4">
             <div className="flex-1">
               <label className="block text-xs text-gray-500 mb-1 uppercase font-semibold tracking-wide">
                 Status
@@ -135,14 +232,12 @@ export default function TaskModal({
           </div>
         </div>
 
-        {/* Comments Section (Only show if editing an existing task) */}
+        {/* Comments Section */}
         {taskToEdit && (
           <div className="flex-1 flex flex-col min-h-0 border-t border-gray-200 pt-4 mt-2">
             <h4 className="text-sm font-bold text-gray-700 mb-3">
               Activity & Comments
             </h4>
-
-            {/* Scrollable Comments List */}
             <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2">
               {comments.length === 0 ? (
                 <p className="text-sm text-gray-400 italic">
@@ -167,8 +262,6 @@ export default function TaskModal({
                 ))
               )}
             </div>
-
-            {/* Post Comment Input */}
             <div className="flex gap-2 flex-shrink-0">
               <input
                 type="text"
@@ -188,7 +281,6 @@ export default function TaskModal({
           </div>
         )}
 
-        {/* Footer Actions */}
         <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-100 flex-shrink-0">
           <button
             onClick={onClose}

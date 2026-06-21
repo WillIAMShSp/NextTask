@@ -3,6 +3,7 @@ import { Draggable } from "@hello-pangea/dnd";
 
 export default function Task({ task, index, onEdit, onDelete, teamMembers }) {
   const assignedMember = teamMembers?.find((m) => m.id === task.assignee_id);
+  const labels = task.labels || [];
 
   return (
     <Draggable draggableId={task.id} index={index}>
@@ -18,6 +19,20 @@ export default function Task({ task, index, onEdit, onDelete, teamMembers }) {
           `}
           style={{ ...provided.draggableProps.style }}
         >
+          {/* Render Labels */}
+          {labels.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-1">
+              {labels.map((label, i) => (
+                <span
+                  key={i}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${label.bg} ${label.textColor} ${label.border}`}
+                >
+                  {label.text}
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="flex justify-between items-start gap-3">
             <span className="break-words flex-1 text-gray-800 text-sm font-medium">
               {task.title}
@@ -41,7 +56,6 @@ export default function Task({ task, index, onEdit, onDelete, teamMembers }) {
             </div>
           </div>
 
-          {/* NEW: Assignee Badge */}
           {assignedMember && (
             <div className="flex items-center gap-2 mt-1">
               <div
