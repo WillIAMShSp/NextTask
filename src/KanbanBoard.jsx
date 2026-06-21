@@ -5,6 +5,7 @@ import { supabase } from "./utils/supabase-js";
 import TaskColumn from "./components/TaskColumn";
 import TaskModal from "./components/TaskModal";
 import TeamManagerModal from "./components/TeamManagerModal";
+import BoardHistoryModal from "./components/BoardHistoryModal";
 
 const COLUMNS = ["todo", "in_progress", "in_review", "done"];
 
@@ -17,8 +18,16 @@ export default function KanbanBoard({ userId }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   //and this one is the team manager one
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  // and this is the history one
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
   const [taskToEdit, setTaskToEdit] = useState(null);
+
+  const logAction = async (actionText) => {
+    await supabase
+      .from("board_history")
+      .insert([{ user_id: userId, action: actionText }]);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -65,6 +74,7 @@ export default function KanbanBoard({ userId }) {
     if (error) {
       console.error("Error adding member:", error);
     } else if (data && data.length > 0) {
+      logAction(`Added ${name} to the team!`);
       setTeamMembers((prev) => [...prev, data[0]]);
     }
   };
@@ -73,6 +83,13 @@ export default function KanbanBoard({ userId }) {
     // Optimistically update the UI to feel fast
     setTeamMembers((prev) => prev.filter((member) => member.id !== id));
 
+    const { name, err } = await supabase
+      .from("team_members")
+      .select("name")
+      .eq("id", id);
+    if (err) {
+      console.error("Error removing member:", err);
+    }
     const { error } = await supabase.from("team_members").delete().eq("id", id);
 
     if (error) {
@@ -80,6 +97,7 @@ export default function KanbanBoard({ userId }) {
       fetchData(); // Revert if database fails
     } else {
       // Re-fetch data because deleting a user sets their tasks to "Unassigned"
+      logAction(`Removed ${name} from the team`);
       fetchData();
     }
   };
@@ -109,6 +127,7 @@ export default function KanbanBoard({ userId }) {
         .eq("id", id);
 
       if (error) fetchData();
+      logAction(`Updated Task ${trimmedTitle}`);
     } else {
       // ADD NEW
       const { data, error } = await supabase
@@ -126,14 +145,17 @@ export default function KanbanBoard({ userId }) {
 
       if (data && data.length > 0) setTasks((prev) => [...prev, data[0]]);
       if (error) console.error(error);
+      logAction(`Added task ${trimmedTitle}`);
     }
     setIsModalOpen(false);
   };
 
   const handleDeleteTask = async (taskId) => {
     setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    const taskToDelete = tasks.find((t) => t.id === taskId);
     const { error } = await supabase.from("tasks").delete().eq("id", taskId);
     if (error) fetchData();
+    logAction(`Deleted Task ${taskToDelete}`);
   };
 
   const handleDragEnd = async (result) => {
@@ -146,10 +168,14 @@ export default function KanbanBoard({ userId }) {
       return;
 
     const newStatus = destination.droppableId;
+    const taskMoved = tasks.find((t) => t.id === draggableId);
     setTasks(
       tasks.map((task) =>
         task.id === draggableId ? { ...task, status: newStatus } : task,
       ),
+    );
+    logAction(
+      `Task "${taskMoved.title}" has been moved to ${newStatus.replace("_", " ")}`,
     );
 
     const { error } = await supabase
@@ -180,7 +206,14 @@ export default function KanbanBoard({ userId }) {
       {/* Top Bar */}
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">My Board</h2>
-
+        {/*The History button*/}
+        <button
+          onClick={() => setIsHistoryModalOpen(true)}
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition-colors"
+        >
+          Board History
+        </button>
+        {/*The manage team button*/}
         <div className="flex gap-3">
           <button
             onClick={() => setIsTeamModalOpen(true)}
@@ -189,6 +222,7 @@ export default function KanbanBoard({ userId }) {
             Manage Team
           </button>
 
+          {/*The Add Task button*/}
           <button
             onClick={openAddModal}
             className="px-4 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors"
@@ -229,6 +263,11 @@ export default function KanbanBoard({ userId }) {
         teamMembers={teamMembers}
         onAddMember={handleAddTeamMember}
         onRemoveMember={handleRemoveTeamMember}
+      />
+      <BoardHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        userId={userId}
       />
     </div>
   );
