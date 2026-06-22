@@ -14,8 +14,11 @@ export default function TeamManagerModal({
     if (!newName.trim() || isSubmitting) return;
     setIsSubmitting(true);
     await onAddMember(newName.trim());
-    setIsSubmitting(false);
-    setNewName(""); // Clear input after saving
+
+    setNewName("");
+    setTimeout(() => {
+      setIsSubmitting(false);
+    }, 500);
   };
 
   return (
