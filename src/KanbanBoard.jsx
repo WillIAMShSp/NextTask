@@ -46,7 +46,7 @@ export default function KanbanBoard({ userId }) {
       .from("tasks")
       .select("*")
       .eq("user_id", userId)
-      .order("created_at", { ascending: true });
+      .order("col_position", { ascending: true });
 
     if (error) console.error("Error fetching tasks:", error);
     else setTasks(data || []);
@@ -122,7 +122,6 @@ export default function KanbanBoard({ userId }) {
     labels,
     due_date,
   }) => {
-    // 1. Add due_date here
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
 
@@ -152,7 +151,7 @@ export default function KanbanBoard({ userId }) {
           assignee_id,
           labels,
           due_date,
-        }) // 2. Add due_date here
+        })
         .eq("id", id);
 
       if (!error) {
@@ -161,6 +160,11 @@ export default function KanbanBoard({ userId }) {
       }
     } else {
       // ADD NEW
+      const targetColumn = status || "todo";
+      const existingColumnLength = tasks.filter(
+        (t) => t.status === targetColumn,
+      ).length;
+
       const { data, error } = await supabase
         .from("tasks")
         .insert([
@@ -172,8 +176,9 @@ export default function KanbanBoard({ userId }) {
             assignee_id,
             labels,
             due_date,
+            col_position: existingColumnLength,
           },
-        ]) // 3. Add due_date here
+        ])
         .select();
 
       if (data && data.length > 0) {
@@ -190,36 +195,110 @@ export default function KanbanBoard({ userId }) {
     const taskToDelete = tasks.find((t) => t.id === taskId);
     const { error } = await supabase.from("tasks").delete().eq("id", taskId);
     if (error) fetchData();
-    logAction(`Deleted Task ${taskToDelete}`);
+    logAction(`Deleted Task ${taskToDelete.title}`);
   };
 
   const handleDragEnd = async (result) => {
-    const { destination, source, draggableId } = result;
+    const { source, destination } = result;
+
+    if (!destination) return;
     if (
-      !destination ||
-      (destination.droppableId === source.droppableId &&
-        destination.index === source.index)
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
     )
       return;
 
-    const newStatus = destination.droppableId;
-    const taskMoved = tasks.find((t) => t.id === draggableId);
-    setTasks(
-      tasks.map((task) =>
-        task.id === draggableId ? { ...task, status: newStatus } : task,
-      ),
-    );
-    logAction(
-      `Task "${taskMoved.title}" has been moved to ${newStatus.replace("_", " ")}`,
-    );
+    const sourceColumn = source.droppableId;
+    const targetColumn = destination.droppableId;
 
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status: newStatus })
-      .eq("id", draggableId);
-    if (error) fetchData();
+    // PATH A: Moving within the SAME column
+    if (sourceColumn === targetColumn) {
+      const columnTasks = tasks
+        .filter((t) => t.status === sourceColumn)
+        .sort((a, b) => (a.col_position || 0) - (b.col_position || 0));
+
+      const reordered = Array.from(columnTasks);
+      const [moved] = reordered.splice(source.index, 1);
+      reordered.splice(destination.index, 0, moved);
+
+      // Re-map index positions sequentially (0, 1, 2...)
+      const positionMapped = reordered.map((t, idx) => ({
+        ...t,
+        col_position: idx,
+      }));
+
+      // Update local state instantly
+      setTasks((prev) =>
+        prev.map((t) => positionMapped.find((pm) => pm.id === t.id) || t),
+      );
+
+      // Save positions to Supabase concurrently
+      const dbUpdates = positionMapped.map((t) =>
+        supabase
+          .from("tasks")
+          .update({ col_position: t.col_position })
+          .eq("id", t.id),
+      );
+      await Promise.all(dbUpdates);
+    }
+
+    // PATH B: Moving to a DIFFERENT column
+    else {
+      const sourceTasks = tasks
+        .filter((t) => t.status === sourceColumn)
+        .sort((a, b) => (a.col_position || 0) - (b.col_position || 0));
+      const targetTasks = tasks
+        .filter((t) => t.status === targetColumn)
+        .sort((a, b) => (a.col_position || 0) - (b.col_position || 0));
+
+      // Remove from source array
+      const reorderedSource = Array.from(sourceTasks);
+      const [moved] = reorderedSource.splice(source.index, 1);
+
+      // Change status and insert into target array
+      const updatedMovedTask = { ...moved, status: targetColumn };
+      const reorderedTarget = Array.from(targetTasks);
+      reorderedTarget.splice(destination.index, 0, updatedMovedTask);
+
+      // Recalculate positions for both affected columns
+      const mappedSource = reorderedSource.map((t, idx) => ({
+        ...t,
+        col_position: idx,
+      }));
+      const mappedTarget = reorderedTarget.map((t, idx) => ({
+        ...t,
+        col_position: idx,
+      }));
+
+      // Update local state instantly
+      setTasks((prev) =>
+        prev.map((t) => {
+          const matchSource = mappedSource.find((ms) => ms.id === t.id);
+          if (matchSource) return matchSource;
+          const matchTarget = mappedTarget.find((mt) => mt.id === t.id);
+          if (matchTarget) return matchTarget;
+          return t;
+        }),
+      );
+
+      // Save column changes and positions concurrently to Supabase
+      const sourceDb = mappedSource.map((t) =>
+        supabase
+          .from("tasks")
+          .update({ col_position: t.col_position })
+          .eq("id", t.id),
+      );
+      const targetDb = mappedTarget.map((t) =>
+        supabase
+          .from("tasks")
+          .update({ status: targetColumn, col_position: t.col_position })
+          .eq("id", t.id),
+      );
+      await Promise.all([...sourceDb, ...targetDb]);
+    }
+
+    logAction(`Reordered tasks`);
   };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -277,7 +356,7 @@ export default function KanbanBoard({ userId }) {
   });
 
   return (
-    <div className="p-6 font-sans">
+    <div className="p-6 font-sans select-none">
       {/* Top Bar */}
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">My Board</h2>
@@ -384,7 +463,9 @@ export default function KanbanBoard({ userId }) {
             <TaskColumn
               key={columnId}
               columnId={columnId}
-              tasks={filteredTasks.filter((task) => task.status === columnId)}
+              tasks={filteredTasks
+                .filter((task) => task.status === columnId)
+                .sort((a, b) => (a.col_position || 0) - (b.col_position || 0))}
               onEdit={openEditModal}
               onDelete={handleDeleteTask}
               teamMembers={teamMembers}

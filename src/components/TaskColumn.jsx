@@ -10,8 +10,8 @@ export default function TaskColumn({
   teamMembers,
 }) {
   return (
-    <div className="flex-1 bg-gray-100/80 p-4 rounded-xl min-w-[280px] border border-gray-200 flex flex-col">
-      <div className="flex justify-between items-center mb-4 px-1">
+    <div className="flex-1 bg-gray-100/80 p-4 rounded-xl min-w-[280px] border border-gray-200 flex flex-col select-none">
+      <div className="flex justify-between items-center mb-4 px-1 select-none">
         <h3 className="capitalize font-semibold text-gray-700 text-sm tracking-wide">
           {columnId.replace("_", " ")}
         </h3>
