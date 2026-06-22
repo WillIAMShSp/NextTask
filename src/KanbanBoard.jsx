@@ -27,6 +27,12 @@ export default function KanbanBoard({ userId }) {
   const [filterAssignee, setFilterAssignee] = useState("");
   const [filterDueDate, setFilterDueDate] = useState("");
   const [filterLabel, setFilterLabel] = useState("");
+  const [activeDropdown, setActiveDropdown] = useState(null); // 'assignee', 'date', 'label', or null
+
+  // Helper to toggle a dropdown and close others
+  const toggleDropdown = (name) => {
+    setActiveDropdown(activeDropdown === name ? null : name);
+  };
 
   const allUniqueLabels = Array.from(
     new Set(tasks.flatMap((t) => (t.labels || []).map((l) => l.text))),
@@ -64,6 +70,9 @@ export default function KanbanBoard({ userId }) {
 
   useEffect(() => {
     fetchData();
+    const handleOutsideClick = () => setActiveDropdown(null);
+    window.addEventListener("click", handleOutsideClick);
+    return () => window.removeEventListener("click", handleOutsideClick);
   }, [fetchData]);
 
   const openAddModal = () => {
@@ -211,7 +220,6 @@ export default function KanbanBoard({ userId }) {
     const sourceColumn = source.droppableId;
     const targetColumn = destination.droppableId;
 
-    // PATH A: Moving within the SAME column
     if (sourceColumn === targetColumn) {
       const columnTasks = tasks
         .filter((t) => t.status === sourceColumn)
@@ -221,18 +229,15 @@ export default function KanbanBoard({ userId }) {
       const [moved] = reordered.splice(source.index, 1);
       reordered.splice(destination.index, 0, moved);
 
-      // Re-map index positions sequentially (0, 1, 2...)
       const positionMapped = reordered.map((t, idx) => ({
         ...t,
         col_position: idx,
       }));
 
-      // Update local state instantly
       setTasks((prev) =>
         prev.map((t) => positionMapped.find((pm) => pm.id === t.id) || t),
       );
 
-      // Save positions to Supabase concurrently
       const dbUpdates = positionMapped.map((t) =>
         supabase
           .from("tasks")
@@ -240,10 +245,7 @@ export default function KanbanBoard({ userId }) {
           .eq("id", t.id),
       );
       await Promise.all(dbUpdates);
-    }
-
-    // PATH B: Moving to a DIFFERENT column
-    else {
+    } else {
       const sourceTasks = tasks
         .filter((t) => t.status === sourceColumn)
         .sort((a, b) => (a.col_position || 0) - (b.col_position || 0));
@@ -251,16 +253,13 @@ export default function KanbanBoard({ userId }) {
         .filter((t) => t.status === targetColumn)
         .sort((a, b) => (a.col_position || 0) - (b.col_position || 0));
 
-      // Remove from source array
       const reorderedSource = Array.from(sourceTasks);
       const [moved] = reorderedSource.splice(source.index, 1);
 
-      // Change status and insert into target array
       const updatedMovedTask = { ...moved, status: targetColumn };
       const reorderedTarget = Array.from(targetTasks);
       reorderedTarget.splice(destination.index, 0, updatedMovedTask);
 
-      // Recalculate positions for both affected columns
       const mappedSource = reorderedSource.map((t, idx) => ({
         ...t,
         col_position: idx,
@@ -384,60 +383,185 @@ export default function KanbanBoard({ userId }) {
             + Add Task
           </button>
         </div>
-        {/*filter bar */}
-        <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-wrap gap-4 items-center">
-          {/* Search */}
+        <div className="mb-6 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-wrap gap-4 items-center select-none">
+          {/* Search Input */}
           <div className="flex-1 min-w-[200px]">
             <input
               type="text"
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border border-gray-300 rounded-md text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
             />
           </div>
 
-          {/* Assignee Filter */}
-          <select
-            value={filterAssignee}
-            onChange={(e) => setFilterAssignee(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md text-sm outline-none bg-white min-w-[140px]"
+          {/* 1. Custom Assignee Dropdown */}
+          <div
+            className="relative min-w-[150px]"
+            onClick={(e) => e.stopPropagation()}
           >
-            <option value="">All Assignees</option>
-            <option value="unassigned">Unassigned</option>
-            {teamMembers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+            <button
+              onClick={() => toggleDropdown("assignee")}
+              className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white text-left flex justify-between items-center hover:border-gray-400 transition-colors"
+            >
+              <span className="truncate">
+                {filterAssignee === "unassigned"
+                  ? "Unassigned"
+                  : teamMembers.find((m) => m.id === filterAssignee)?.name ||
+                    "All Assignees"}
+              </span>
+              <span
+                className={`text-xs transition-transform duration-200 ${activeDropdown === "assignee" ? "rotate-180" : ""}`}
+              >
+                ▼
+              </span>
+            </button>
 
-          {/* Due Date Filter */}
-          <select
-            value={filterDueDate}
-            onChange={(e) => setFilterDueDate(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md text-sm outline-none bg-white min-w-[140px]"
-          >
-            <option value="">Any Due Date</option>
-            <option value="overdue">Overdue</option>
-            <option value="soon">Due Soon</option>
-            <option value="later">Due Later</option>
-            <option value="none">No Due Date</option>
-          </select>
+            <div
+              className={`absolute left-0 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto transition-all duration-200 origin-top transform ${
+                activeDropdown === "assignee"
+                  ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+              }`}
+            >
+              <div className="p-1">
+                <button
+                  onClick={() => {
+                    setFilterAssignee("");
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                >
+                  All Assignees
+                </button>
+                <button
+                  onClick={() => {
+                    setFilterAssignee("unassigned");
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                >
+                  Unassigned
+                </button>
+                {teamMembers.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setFilterAssignee(m.id);
+                      setActiveDropdown(null);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                  >
+                    {m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
-          {/* Label Filter */}
-          <select
-            value={filterLabel}
-            onChange={(e) => setFilterLabel(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md text-sm outline-none bg-white min-w-[140px]"
+          {/* 2. Custom Due Date Dropdown */}
+          <div
+            className="relative min-w-[150px]"
+            onClick={(e) => e.stopPropagation()}
           >
-            <option value="">All Labels</option>
-            {allUniqueLabels.map((label) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
+            <button
+              onClick={() => toggleDropdown("date")}
+              className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white text-left flex justify-between items-center hover:border-gray-400 transition-colors"
+            >
+              <span className="transparent capitalize">
+                {filterDueDate
+                  ? filterDueDate
+                      .replace("none", "No Due Date")
+                      .replace("soon", "Due Soon")
+                      .replace("later", "Due Later")
+                  : "Any Due Date"}
+              </span>
+              <span
+                className={`text-xs transition-transform duration-200 ${activeDropdown === "date" ? "rotate-180" : ""}`}
+              >
+                ▼
+              </span>
+            </button>
+
+            <div
+              className={`absolute left-0 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg z-50 transition-all duration-200 origin-top transform ${
+                activeDropdown === "date"
+                  ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+              }`}
+            >
+              <div className="p-1">
+                {[
+                  { val: "", label: "Any Due Date" },
+                  { val: "overdue", label: "Overdue" },
+                  { val: "soon", label: "Due Soon" },
+                  { val: "later", label: "Due Later" },
+                  { val: "none", label: "No Due Date" },
+                ].map((opt) => (
+                  <button
+                    key={opt.val}
+                    onClick={() => {
+                      setFilterDueDate(opt.val);
+                      setActiveDropdown(null);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Custom Label Dropdown */}
+          <div
+            className="relative min-w-[150px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => toggleDropdown("label")}
+              className="w-full p-2 border border-gray-300 rounded-md text-sm bg-white text-left flex justify-between items-center hover:border-gray-400 transition-colors"
+            >
+              <span className="truncate">{filterLabel || "All Labels"}</span>
+              <span
+                className={`text-xs transition-transform duration-200 ${activeDropdown === "label" ? "rotate-180" : ""}`}
+              >
+                ▼
+              </span>
+            </button>
+
+            <div
+              className={`absolute left-0 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto transition-all duration-200 origin-top transform ${
+                activeDropdown === "label"
+                  ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 scale-95 -translate-y-2 pointer-events-none"
+              }`}
+            >
+              <div className="p-1">
+                <button
+                  onClick={() => {
+                    setFilterLabel("");
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                >
+                  All Labels
+                </button>
+                {allUniqueLabels.map((label) => (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      setFilterLabel(label);
+                      setActiveDropdown(null);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
           {/* Clear Filters Button */}
           {(searchQuery || filterAssignee || filterDueDate || filterLabel) && (
@@ -448,7 +572,7 @@ export default function KanbanBoard({ userId }) {
                 setFilterDueDate("");
                 setFilterLabel("");
               }}
-              className="text-sm text-gray-500 hover:text-red-600 font-medium px-2"
+              className="text-sm text-gray-500 hover:text-red-600 font-medium px-2 transition-colors"
             >
               Clear All
             </button>

@@ -26,11 +26,7 @@ export default function TeamManagerModal({
           : "opacity-0 pointer-events-none"
       }`}
     >
-      <div
-        className={`bg-white p-6 md:p-8 rounded-lg w-full max-w-2xl shadow-xl max-h-[90vh] flex flex-col relative transition-all duration-300 ease-out transform ${
-          isOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"
-        }`}
-      >
+      <div>
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-md shadow-xl flex flex-col max-h-[80vh]">
             {/* Header */}
