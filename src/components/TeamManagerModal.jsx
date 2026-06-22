@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useTeamManagerModal } from "../controller_functions/TeamManagerModal";
 
 export default function TeamManagerModal({
   isOpen,
@@ -7,19 +8,7 @@ export default function TeamManagerModal({
   onAddMember,
   onRemoveMember,
 }) {
-  const [newName, setNewName] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleAdd = async () => {
-    if (!newName.trim() || isSubmitting) return;
-    setIsSubmitting(true);
-    await onAddMember(newName.trim());
-
-    setNewName("");
-    setTimeout(() => {
-      setIsSubmitting(false);
-    }, 500);
-  };
+  const { newName, setNewName, handleAdd } = useTeamManagerModal(onAddMember);
 
   return (
     <div
