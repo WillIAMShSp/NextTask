@@ -174,6 +174,7 @@ export function useKanbanData(userId) {
 
     const sourceColumn = source.droppableId;
     const targetColumn = destination.droppableId;
+    let movedTask = null; // Declared here so it's accessible to the log at the bottom
 
     if (sourceColumn === targetColumn) {
       const columnTasks = tasks
@@ -182,6 +183,7 @@ export function useKanbanData(userId) {
 
       const reordered = Array.from(columnTasks);
       const [moved] = reordered.splice(source.index, 1);
+      movedTask = moved; // Capture the task
       reordered.splice(destination.index, 0, moved);
 
       const positionMapped = reordered.map((t, idx) => ({
@@ -209,6 +211,7 @@ export function useKanbanData(userId) {
 
       const reorderedSource = Array.from(sourceTasks);
       const [moved] = reorderedSource.splice(source.index, 1);
+      movedTask = moved; // Capture the task
       const updatedMovedTask = { ...moved, status: targetColumn };
 
       const reorderedTarget = Array.from(targetTasks);
@@ -248,7 +251,10 @@ export function useKanbanData(userId) {
       await Promise.all([...sourceDb, ...targetDb]);
     }
 
-    logAction(`Reordered tasks`);
+    // Logs the task name/content (or falls back to ID if it doesn't have a title property) and the target column
+    logAction(
+      `Reordered task "${movedTask?.title || movedTask?.id}" into column "${targetColumn.replace("_", " ")}"`,
+    );
   };
 
   return {
