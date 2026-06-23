@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import KanbanBoard from "./KanbanBoard";
 import { supabase } from "./utils/supabase-js";
 import Auth from "./components/Auth";
+import { Analytics } from "@vercel/analytics/react";
 
 function App() {
   const [session, setSession] = useState(null);
