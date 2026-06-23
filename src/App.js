@@ -58,6 +58,7 @@ function App() {
           </div>
 
           {/* Pass the authenticated user's ID to the board */}
+          <Analytics />
           <KanbanBoard userId={session.user.id} />
         </div>
       )}
