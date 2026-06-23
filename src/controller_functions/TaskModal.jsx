@@ -109,7 +109,8 @@ export const useTaskModalController = ({
     if (!trimmedTitle || isSubmitting) return;
 
     setIsSubmitting(true);
-    const formattedDate = formatToDateTimeLocal(dueDate);
+    console.log(dueDate);
+
     await onSave({
       id: taskToEdit?.id,
       title: trimmedTitle,
@@ -117,7 +118,7 @@ export const useTaskModalController = ({
       status,
       assignee_id: assigneeId === "" ? null : assigneeId,
       labels,
-      due_date: dueDate ? formattedDate : null, //new Date(dueDate).toISOString() : null,
+      due_date: dueDate ? new Date(dueDate).toISOString() : null,
     });
 
     setIsSubmitting(false);
